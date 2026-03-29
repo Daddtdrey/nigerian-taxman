@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TaxAssessment, Transaction } from '../types';
 import { formatNaira, cn } from '../lib/utils';
 import { TaxDataTable } from './TaxDataTable';
-import { Lock, Unlock, AlertTriangle, ArrowLeft, Calculator, LogOut, CheckCircle2, Download } from 'lucide-react';
+import { Lock, AlertTriangle, ArrowLeft, Calculator, LogOut, CheckCircle2, Download } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { supabase } from '../lib/supabase';
 import { PaystackButton } from 'react-paystack';
