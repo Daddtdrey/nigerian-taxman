@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 // Load .env variables manually since we are outside Vite's normal process here
 const __filename = fileURLToPath(import.meta.url);
@@ -16,7 +17,49 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Initialize Supabase Admin strictly using Service Role Key
+const supabaseAdminUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseAdmin = createClient(supabaseAdminUrl, supabaseServiceKey);
+
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+
+app.post('/api/selar/webhook', async (req, res) => {
+  console.log("🔔 Incoming Selar Webhook:", req.body);
+  try {
+    // Selar sends payload with { event, data: { customer: { email } } }
+    const { event, data } = req.body;
+
+    if (event === 'sale.successful' && data?.customer?.email) {
+      const emailQuery = data.customer.email.trim().toLowerCase();
+
+      // Find user in Supabase by email using Admin privileges
+      const { data: userData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      
+      if (listError) throw listError;
+
+      const targetUser = userData?.users.find(u => u.email?.toLowerCase() === emailQuery);
+
+      if (targetUser) {
+        // OVERRIDE: Unlock the user's account server-side
+        console.log(`Unlocking account for ${emailQuery} (ID: ${targetUser.id})`);
+        
+        await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
+          user_metadata: { is_premium: true }
+        });
+
+        return res.status(200).json({ message: "Successfully unlocked Premium for user." });
+      } else {
+        console.log(`Webhook Ignored: User ${emailQuery} not found in database.`);
+      }
+    }
+
+    res.status(200).json({ message: "Webhook received but ignored (Not a successful sale or missing email)." });
+  } catch (error: any) {
+    console.error("Webhook Error:", error);
+    res.status(500).json({ error: "Webhook Failure" });
+  }
+});
 
 app.post('/api/gemini/extract', async (req, res) => {
   const apiKey = process.env.VITE_GEMINI_API_KEY;

@@ -5,7 +5,6 @@ import { TaxDataTable } from './TaxDataTable';
 import { Lock, AlertTriangle, ArrowLeft, Calculator, LogOut, CheckCircle2, Download } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { supabase } from '../lib/supabase';
-import { PaystackButton } from 'react-paystack';
 
 interface ResultsDashboardProps {
   assessment: TaxAssessment;
@@ -25,24 +24,21 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     return user?.user_metadata?.is_premium === true;
   });
 
-  // Paystack Configuration
-  const config = {
-    reference: (new Date()).getTime().toString(),
-    email: user?.email || "customer@example.com",
-    amount: 1500 * 100, // ₦1500 represented in kobo
-    currency: "NGN",
-    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "pk_test_placeholder",
-  };
-  
-  const componentProps = {
-    ...config,
-    onSuccess: (reference: any) => {
-      console.log("Paystack Success:", reference);
-      supabase.auth.updateUser({ data: { is_premium: true } }).catch(err => console.error("DB Sync error", err));
-      setIsPremium(true);
-    },
-    onClose: () => console.log("Paystack closed"),
-  };
+  // Selar Configuration Loop
+  const selarLink = `https://selar.co/taxman?email=${encodeURIComponent(user?.email || "")}`;
+
+  // Poll Supabase to automatically unlock when Webhook succeeds
+  React.useEffect(() => {
+    if (isPremium) return;
+    const interval = setInterval(async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data.user?.user_metadata?.is_premium) {
+        setIsPremium(true);
+        clearInterval(interval);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isPremium]);
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 pb-24 transition-colors duration-300">
@@ -127,12 +123,15 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
                   <p className="text-neutral-500 dark:text-neutral-400 text-sm mb-6 leading-relaxed">
                     Instantly reveal your exact AI tax liability calculation, effective rate, line-item Gemini API AI categorizations, and compliance checklist.
                   </p>
-                  <PaystackButton 
-                    {...componentProps}
-                    text="Pay ₦1,500"
+                  <a 
+                    href={selarLink}
+                    target="_blank"
+                    rel="noreferrer"
                     className="w-full bg-nigeria-green group hover:bg-nigeria-green-dark text-white font-semibold py-3 px-6 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
-                  />
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-4 font-mono">Secure transaction via Paystack</p>
+                  >
+                    Pay ₦1,500 via Selar
+                  </a>
+                  <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-4 font-mono">Screen unblurs automatically upon successful payment.</p>
                 </div>
               </div>
             )}
